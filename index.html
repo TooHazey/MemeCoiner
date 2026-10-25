@@ -42,14 +42,27 @@ input[type=number]{width:60px;background:var(--bg);color:var(--ink);border:1px s
 .empty{padding:28px;text-align:center;color:var(--mu);margin:0}.disc{color:var(--mu);font-size:13px;max-width:70ch;margin:18px 4px}
 @media(max-width:720px){.row{grid-template-columns:auto 1fr auto}.row .stats{display:grid;grid-template-columns:repeat(4,1fr);grid-column:1/-1;gap:6px}
 .hero{grid-template-columns:1fr;padding:22px}.hero .stats{grid-template-columns:repeat(2,auto)}}
-</style></head><body><div class="w">
-<header><h1>Memewatch</h1><span class="live"><i></i><span id="st" role="status">Loading…</span></span>
+.orbs{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.orbs i{position:absolute;border-radius:50%;filter:blur(90px);will-change:transform}
+.orbs i:first-child{width:420px;height:420px;background:#7a5cff;opacity:.45;top:-120px;left:-100px}
+.orbs i:last-child{width:380px;height:380px;background:#22d3b0;opacity:.28;top:45vh;right:-120px}
+.w{position:relative;z-index:1}
+#hero{position:sticky;top:12px;z-index:1;transform-origin:top center;will-change:transform,filter}
+.sheet{position:relative;z-index:2;min-height:70vh;margin:0 -16px;padding:2px 16px 8px;border-radius:28px 28px 0 0;background:color-mix(in srgb,var(--bg) 90%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 -24px 40px -12px rgba(27,23,64,.28)}
+@media(prefers-color-scheme:dark){.sheet{box-shadow:0 -24px 40px -12px rgba(0,0,0,.6)}}
+.dc{display:inline-flex;gap:7px;align-items:center;background:var(--hero);color:#fff;text-decoration:none;border-radius:999px;padding:7px 15px;font-weight:600;font-size:14px}.dc:hover{filter:brightness(1.12)}
+.disc a{color:var(--ink)}
+.row.new{animation:in .5s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(var(--i)*40ms)}
+@keyframes in{from{opacity:0;transform:translateY(14px) scale(.98)}}
+@media(prefers-reduced-motion:reduce){.row.new{animation:none}}
+</style></head><body><div class="orbs" aria-hidden="true"><i></i><i></i></div><div class="w">
+<header><h1>Memewatch</h1><a class="dc" href="https://discord.gg/nemuJUFCGY" target="_blank" rel="noopener"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4v-4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></svg>Join the Discord</a><span class="live"><i></i><span id="st" role="status">Loading…</span></span>
 <p class="tag">Gaining memecoins on the chains Fomo supports, scored by simple rules.</p></header>
 <details class="set"><summary>Settings</summary><div class="bar">
 <label><input type="checkbox" value="solana"> Solana</label><label><input type="checkbox" value="base"> Base</label><label><input type="checkbox" value="bsc"> BNB</label><label><input type="checkbox" value="monad"> Monad</label>
 <label>Alert at score <input id="min" type="number" min="50" max="100"></label><label><input id="snd" type="checkbox"> Sound</label><button id="en">Turn on alerts</button></div></details>
-<div id="hero"></div><div class="tabs" id="tabs"></div><div class="list" id="rows"><p class="empty">Scanning…</p></div>
-<p class="disc">Not financial advice. Most memecoins go to zero and many are scams. BUY means the numbers look healthy right now, not that the price will rise. Only risk what you can lose, and size small.</p></div>
+<div id="hero"></div><div class="sheet"><div class="tabs" id="tabs"></div><div class="list" id="rows"><p class="empty">Scanning…</p></div>
+<p class="disc">Not financial advice. Most memecoins go to zero and many are scams. BUY means the numbers look healthy right now, not that the price will rise. Only risk what you can lose, and size small. Questions or tips? <a href="https://discord.gg/nemuJUFCGY" target="_blank" rel="noopener">Join the Discord</a>.</p></div></div>
 <script type="module">
 import { scan, fmt, age } from './score.js';
 const $ = s => document.querySelector(s), boxes = [...document.querySelectorAll('input[type=checkbox][value]')];
@@ -60,7 +73,7 @@ boxes.forEach(b => { b.checked = cfg.nets.includes(b.value); b.onchange = () => 
 $('#min').value = cfg.min; $('#snd').checked = cfg.snd; $('#min').onchange = $('#snd').onchange = save;
 $('#en').onclick = async () => { if ('Notification' in window) { const r = await Notification.requestPermission(); $('#en').textContent = r === 'granted' ? 'Alerts on' : 'Alerts blocked'; } else $('#en').textContent = 'Not supported'; beep(); };
 function beep() { try { const c = new AudioContext(), o = c.createOscillator(); o.connect(c.destination); o.frequency.value = 880; o.start(); o.stop(c.currentTime + .25); } catch {} }
-let rows = [], view = 'ALL';
+let rows = [], view = 'ALL'; const shown = new Set();
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const pc = n => `<span class="${n >= 0 ? 'up' : 'dn'}">${n >= 0 ? '+' : ''}${n.toFixed(1)}%</span>`;
 const stats = r => `<div class="stats">${[['1h', pc(r.h1)], ['24h', pc(r.h24)], ['Liquidity', '$' + fmt(r.liq)], ['Volume', '$' + fmt(r.vol)]].map(([l, v]) => `<div class="st"><b>${v}</b><span>${l}</span></div>`).join('')}</div>`;
@@ -72,7 +85,8 @@ function render() {
   const n = v => rows.filter(r => r.verdict === v).length;
   $('#tabs').innerHTML = [['ALL', 'All', rows.length], ['BUY', 'Buy', n('BUY')], ['WATCH', 'Watch', n('WATCH')], ['AVOID', 'Avoid', n('AVOID')]].map(([k, l, c]) => `<button class="tab${view === k ? ' on' : ''}" data-v="${k}">${l}<b>${c}</b></button>`).join('');
   const list = rows.slice(1).filter(r => view === 'ALL' || r.verdict === view).slice(0, 60);
-  $('#rows').innerHTML = list.length ? list.map(r => `<div class="row ${r.verdict}">${ring(r)}<div class="nm"><a href="${r.url}" target="_blank" rel="noopener">${esc(r.sym)}</a><span class="pill">${r.verdict}</span><p class="sub">On ${r.net}, ${age(r.ageH)} old</p></div>${stats(r)}${cp(r)}<p class="why">${esc(r.why.join('. '))}</p></div>`).join('') : `<p class="empty">${rows.length ? 'Nothing else in this filter right now.' : 'Scanning…'}</p>`;
+  $('#rows').innerHTML = list.length ? list.map((r, i) => `<div class="row ${r.verdict}${shown.has(r.key) ? '' : ' new'}" style="--i:${Math.min(i, 12)}">${ring(r)}<div class="nm"><a href="${r.url}" target="_blank" rel="noopener">${esc(r.sym)}</a><span class="pill">${r.verdict}</span><p class="sub">On ${r.net}, ${age(r.ageH)} old</p></div>${stats(r)}${cp(r)}<p class="why">${esc(r.why.join('. '))}</p></div>`).join('') : `<p class="empty">${rows.length ? 'Nothing else in this filter right now.' : 'Scanning…'}</p>`;
+  list.forEach(r => shown.add(r.key));
 }
 document.addEventListener('click', e => {
   const t = e.target.closest('.tab'); if (t) { view = t.dataset.v; render(); return; }
@@ -91,5 +105,13 @@ async function tick() {
     first = false; $('#st').textContent = 'Live, updated ' + new Date().toLocaleTimeString();
   } catch (e) { $('#st').textContent = 'Fetch failed, retrying (' + e.message + ')'; }
 }
+const calm = matchMedia('(prefers-reduced-motion: reduce)').matches, orbs = document.querySelectorAll('.orbs i'), heroEl = $('#hero');
+let busy = false;
+function depth() {
+  busy = false; const y = Math.min(scrollY, 1400), p = Math.min(1, scrollY / ((heroEl.offsetHeight || 400) * .9));
+  orbs[0].style.transform = `translateY(${-y * .2}px)`; orbs[1].style.transform = `translateY(${-y * .45}px)`;
+  heroEl.style.transform = `scale(${1 - .08 * p})`; heroEl.style.filter = `brightness(${1 - .5 * p})`;
+}
+if (!calm) addEventListener('scroll', () => { if (!busy) { busy = true; requestAnimationFrame(depth); } }, { passive: true });
 tick(); setInterval(tick, 30000);
 </script></body></html>

@@ -25,7 +25,7 @@ try { all = await scan(nets); } catch (e) {
 const buys = all.filter(r => r.verdict === 'BUY' && r.score >= min);
 const hits = buys.filter(r => !seen[r.key]);
 console.log(`Scanned ${all.length} pools, ${buys.length} BUY, ${hits.length} new`);
-if (manual && hook) await post({ content: `Memewatch scanner is running. Scanned ${all.length} pools: ${buys.length} BUY now, ${hits.length} new. Top: ${all.slice(0, 3).map(r => `${r.sym} ${r.score}`).join(', ') || 'none'}` });
+if (hook) await post({ content: `🤖 Memecoin scan complete!\nScanned: ${all.length} pools\nBUY signals: ${buys.length}\nNew signals: ${hits.length}\nTop: ${all.slice(0, 3).map(r => `${r.sym} (${r.score}/100)`).join(', ') || 'None found'}` });
 for (const r of hits.slice(0, 8)) {
   if (!hook) { console.log(r.sym, r.score, r.url); continue; }
   const ok = await post({ embeds: [{

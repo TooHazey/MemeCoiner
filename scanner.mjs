@@ -1,19 +1,27 @@
 // Runs every ~5 min in GitHub Actions. Posts new BUY signals to Discord (push notifications on your phone).
 import fs from 'fs';
 import { scan, fmt } from './score.js';
-const hook = process.env.DISCORD_WEBHOOK_URL, min = +process.env.MIN_SCORE || 70;
+const hook = (process.env.DISCORD_WEBHOOK_URL || '').trim().replace(/^["']|["']$/g, ''), min = +process.env.MIN_SCORE || 70;
 const manual = process.env.GITHUB_EVENT_NAME === 'workflow_dispatch';
 const nets = (process.env.NETWORKS || 'solana,base,bsc').split(',');
 const f = 'data/seen.json'; fs.mkdirSync('data', { recursive: true });
 const seen = fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, 'utf8')) : {};
 for (const k in seen) if (Date.now() - seen[k] > 3 * 864e5) delete seen[k];
 const post = async body => {
-  const res = await fetch(hook, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  if (!res.ok) console.log('Discord rejected the message:', res.status, await res.text());
-  return res.ok;
+  try {
+    const res = await fetch(hook, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    if (!res.ok) console.log('Discord rejected the message:', res.status, await res.text());
+    return res.ok;
+  } catch (e) { console.log('Could not reach Discord:', e.message); return false; }
 };
 if (!hook) console.log('No DISCORD_WEBHOOK_URL secret found: printing signals only');
-const all = await scan(nets);
+if (manual && hook) await post({ content: 'Memewatch test: Discord connection works. Scanning now...' });
+let all;
+try { all = await scan(nets); } catch (e) {
+  console.log('Scan failed:', e.message);
+  if (manual && hook) await post({ content: 'Memewatch scan failed: ' + e.message });
+  process.exit(1);
+}
 const buys = all.filter(r => r.verdict === 'BUY' && r.score >= min);
 const hits = buys.filter(r => !seen[r.key]);
 console.log(`Scanned ${all.length} pools, ${buys.length} BUY, ${hits.length} new`);

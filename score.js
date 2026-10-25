@@ -1,10 +1,18 @@
 // Shared by the website and the GitHub Action. Rules-based only (no AI), free APIs, no keys.
 const GT = 'https://api.geckoterminal.com/api/v2/networks';
 export const FOMO = new Set(['solana', 'base', 'bsc', 'monad']); // chains the Fomo app trades
-const cache = new Map();
-const j = u => { const c = cache.get(u); if (c && Date.now() - c.t < 45e3) return c.p;
-  const p = fetch(u, { headers: { accept: 'application/json' } }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
-  cache.set(u, { t: Date.now(), p }); p.catch(() => cache.delete(u)); return p; };
+const store = typeof localStorage !== 'undefined' ? localStorage : null, mem = new Map();
+const j = async u => { // cached 55s (survives page reloads); falls back to stale data if the API blocks us
+  const k = 'mw:' + u; let c = mem.get(k);
+  if (!c && store) { try { c = JSON.parse(store.getItem(k)); } catch {} }
+  if (c && Date.now() - c.t < 55e3) return c.d;
+  let r;
+  try { r = await fetch(u, { headers: { accept: 'application/json' } }); }
+  catch { if (c) return c.d; throw new Error('data source blocked the request (rate limit or VPN). Wait a minute and try again'); }
+  if (!r.ok) { if (c) return c.d; throw new Error('HTTP ' + r.status); }
+  c = { t: Date.now(), d: await r.json() }; mem.set(k, c);
+  if (store) { try { store.setItem(k, JSON.stringify(c)); } catch {} }
+  return c.d; };
 export const fmt = n => n >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(0) + 'k' : n.toFixed(0);
 export const age = h => h < 1 ? Math.round(h * 60) + 'm' : h < 48 ? h.toFixed(0) + 'h' : h < 1e4 ? (h / 24).toFixed(0) + 'd' : 'old';
 
@@ -44,12 +52,13 @@ const norm = p => {
 };
 
 export async function scan(nets = ['solana', 'base']) {
-  const pools = u => j(u).then(d => d.data.map(norm));
-  const jobs = nets.flatMap(n => [pools(`${GT}/${n}/trending_pools?duration=1h`), pools(`${GT}/${n}/trending_pools?duration=24h`),
-    pools(`${GT}/${n}/pools?sort=h24_volume_usd_desc`), pools(`${GT}/${n}/new_pools`)]);
-  const res = await Promise.allSettled(jobs);
-  if (res.every(r => r.status === 'rejected')) throw new Error(res[0].reason.message);
-  const map = new Map();
-  res.filter(r => r.status === 'fulfilled').flatMap(r => r.value).forEach(p => map.set(p.key, p));
+  const urls = nets.flatMap(n => [`${GT}/${n}/trending_pools?duration=1h`, `${GT}/${n}/trending_pools?duration=24h`,
+    `${GT}/${n}/pools?sort=h24_volume_usd_desc`, `${GT}/${n}/new_pools`]);
+  const map = new Map(); let ok = 0, err;
+  for (const u of urls) { // one at a time, spaced out, to stay under the free rate limit
+    try { (await j(u)).data.map(norm).forEach(p => map.set(p.key, p)); ok++; } catch (e) { err = e; }
+    await new Promise(r => setTimeout(r, 300));
+  }
+  if (!ok) throw err;
   return [...map.values()].filter(p => FOMO.has(p.net) && nets.includes(p.net)).map(evaluate).sort((a, b) => b.score - a.score);
 }

@@ -1,7 +1,10 @@
 // Shared by the website and the GitHub Action. Rules-based only (no AI), free APIs, no keys.
 const GT = 'https://api.geckoterminal.com/api/v2/networks';
 export const FOMO = new Set(['solana', 'base', 'bsc', 'monad']); // chains the Fomo app trades
-const j = u => fetch(u, { headers: { accept: 'application/json' } }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+const cache = new Map();
+const j = u => { const c = cache.get(u); if (c && Date.now() - c.t < 45e3) return c.p;
+  const p = fetch(u, { headers: { accept: 'application/json' } }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+  cache.set(u, { t: Date.now(), p }); p.catch(() => cache.delete(u)); return p; };
 export const fmt = n => n >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(0) + 'k' : n.toFixed(0);
 export const age = h => h < 1 ? Math.round(h * 60) + 'm' : h < 48 ? h.toFixed(0) + 'h' : h < 1e4 ? (h / 24).toFixed(0) + 'd' : 'old';
 
@@ -41,7 +44,9 @@ const norm = p => {
 };
 
 export async function scan(nets = ['solana', 'base']) {
-  const jobs = [j(`${GT}/trending_pools`).then(d => d.data.map(norm)), ...nets.map(n => j(`${GT}/${n}/new_pools`).then(d => d.data.map(norm)))];
+  const pools = u => j(u).then(d => d.data.map(norm));
+  const jobs = nets.flatMap(n => [pools(`${GT}/${n}/trending_pools?duration=1h`), pools(`${GT}/${n}/trending_pools?duration=24h`),
+    pools(`${GT}/${n}/pools?sort=h24_volume_usd_desc`), pools(`${GT}/${n}/new_pools`)]);
   const res = await Promise.allSettled(jobs);
   if (res.every(r => r.status === 'rejected')) throw new Error(res[0].reason.message);
   const map = new Map();

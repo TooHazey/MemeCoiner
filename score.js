@@ -1,5 +1,6 @@
 // Shared by the website and the GitHub Action. Rules-based only (no AI), free APIs, no keys.
 const GT = 'https://api.geckoterminal.com/api/v2/networks';
+export const FOMO = new Set(['solana', 'base', 'bsc', 'monad']); // chains the Fomo app trades
 const j = u => fetch(u, { headers: { accept: 'application/json' } }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
 export const fmt = n => n >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(0) + 'k' : n.toFixed(0);
 export const age = h => h < 1 ? Math.round(h * 60) + 'm' : h < 48 ? h.toFixed(0) + 'h' : h < 1e4 ? (h / 24).toFixed(0) + 'd' : 'old';
@@ -35,21 +36,15 @@ const norm = p => {
   return { key: p.id, net, sym: a.name, liq: +a.reserve_in_usd || 0, vol: +a.volume_usd?.h24 || 0,
     h1: +a.price_change_percentage?.h1 || 0, h24: +a.price_change_percentage?.h24 || 0,
     buys: t.buys || 0, sells: t.sells || 0, ageH: (Date.now() - new Date(a.pool_created_at)) / 36e5,
+    addr: (p.relationships.base_token?.data?.id || '').split('_').slice(1).join('_'),
     url: `https://www.geckoterminal.com/${net}/pools/${a.address}`, kind: 'meme' };
 };
 
-const majors = async () => (await j('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=volume_desc&per_page=60&price_change_percentage=1h,24h'))
-  .filter(c => (c.price_change_percentage_24h_in_currency || 0) >= 5)
-  .map(c => ({ key: 'cg:' + c.id, net: 'major', sym: c.symbol.toUpperCase(), liq: c.market_cap * 0.05, vol: c.total_volume,
-    h1: c.price_change_percentage_1h_in_currency || 0, h24: c.price_change_percentage_24h_in_currency || 0,
-    buys: 0, sells: 0, ageH: 1e5, url: 'https://www.coingecko.com/en/coins/' + c.id, kind: 'major' }));
-
 export async function scan(nets = ['solana', 'base']) {
-  const jobs = [j(`${GT}/trending_pools`).then(d => d.data.map(norm)), majors(),
-    ...nets.map(n => j(`${GT}/${n}/new_pools`).then(d => d.data.map(norm)))];
+  const jobs = [j(`${GT}/trending_pools`).then(d => d.data.map(norm)), ...nets.map(n => j(`${GT}/${n}/new_pools`).then(d => d.data.map(norm)))];
   const res = await Promise.allSettled(jobs);
   if (res.every(r => r.status === 'rejected')) throw new Error(res[0].reason.message);
   const map = new Map();
   res.filter(r => r.status === 'fulfilled').flatMap(r => r.value).forEach(p => map.set(p.key, p));
-  return [...map.values()].map(evaluate).sort((a, b) => b.score - a.score);
+  return [...map.values()].filter(p => FOMO.has(p.net) && nets.includes(p.net)).map(evaluate).sort((a, b) => b.score - a.score);
 }

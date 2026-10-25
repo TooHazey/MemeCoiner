@@ -15,10 +15,10 @@ table{width:100%;border-collapse:collapse;min-width:760px}th,td{text-align:left;
 tr.BUY td:first-child{border-left:4px solid var(--buy)}tr.WATCH td:first-child{border-left:4px solid var(--wat)}tr.AVOID td:first-child{border-left:4px solid var(--avd)}
 .v{font-weight:800}.BUY .v{color:var(--buy)}.WATCH .v{color:var(--wat)}.AVOID .v{color:var(--avd)}.up{color:var(--buy)}.dn{color:var(--avd)}.mu{color:var(--mu);font-size:13px}a{color:inherit}
 td.why{max-width:340px;color:var(--mu);font-size:13px}.disc{max-width:1100px;margin:0 auto;color:var(--mu);font-size:13px}
-</style></head><body>
-<header><h1>Memewatch</h1><p class="sub">New and gaining memecoins and crypto, scored by simple rules. Refreshes every 30 seconds.</p>
+.cp{padding:2px 8px;margin-left:6px;font-size:12px;background:none;color:var(--tx);border:1px solid var(--ln)}</style></head><body>
+<header><h1>Memewatch</h1><p class="sub">New and gaining memecoins on the chains Fomo supports (Solana, Base, BNB, Monad), scored by simple rules. Refreshes every 30 seconds.</p>
 <div class="bar">
-<label><input type="checkbox" value="solana"> Solana</label><label><input type="checkbox" value="base"> Base</label><label><input type="checkbox" value="eth"> Ethereum</label><label><input type="checkbox" value="bsc"> BNB</label>
+<label><input type="checkbox" value="solana"> Solana</label><label><input type="checkbox" value="base"> Base</label><label><input type="checkbox" value="bsc"> BNB</label><label><input type="checkbox" value="monad"> Monad</label>
 <label>Alert at score <input id="min" type="number" min="50" max="100"></label><label><input id="snd" type="checkbox"> Sound</label>
 <button id="en">Turn on alerts</button><span id="st" role="status">Loading…</span></div></header>
 <div class="wrap"><table><thead><tr><th>Token</th><th>Verdict</th><th>1h</th><th>24h</th><th>Liquidity</th><th>Volume</th><th>Age</th><th>Why</th></tr></thead><tbody id="rows"></tbody></table></div>
@@ -35,9 +35,10 @@ $('#en').onclick = async () => { if ('Notification' in window) { const r = await
 const pc = n => `<span class="${n >= 0 ? 'up' : 'dn'}">${n >= 0 ? '+' : ''}${n.toFixed(1)}%</span>`;
 function beep() { try { const c = new AudioContext(), o = c.createOscillator(); o.connect(c.destination); o.frequency.value = 880; o.start(); o.stop(c.currentTime + .25); } catch {} }
 function render(rows) {
-  $('#rows').innerHTML = rows.slice(0, 60).map(r => `<tr class="${r.verdict}"><td><a href="${r.url}" target="_blank" rel="noopener"><b>${r.sym.replace(/</g, '&lt;')}</b></a><div class="mu">${r.net}</div></td>
+  $('#rows').innerHTML = rows.slice(0, 60).map(r => `<tr class="${r.verdict}"><td><a href="${r.url}" target="_blank" rel="noopener"><b>${r.sym.replace(/</g, '&lt;')}</b></a><div class="mu">${r.net} <button class="cp" data-a="${r.addr}">Copy address</button></div></td>
   <td><span class="v">${r.verdict}</span><div class="mu">${r.score}/100</div></td><td>${pc(r.h1)}</td><td>${pc(r.h24)}</td><td>$${fmt(r.liq)}</td><td>$${fmt(r.vol)}</td><td>${age(r.ageH)}</td><td class="why">${r.why.join('. ')}</td></tr>`).join('');
 }
+$('#rows').onclick = e => { const b = e.target.closest('.cp'); if (!b) return; navigator.clipboard.writeText(b.dataset.a).then(() => { b.textContent = 'Copied'; setTimeout(() => b.textContent = 'Copy address', 1500); }); };
 const seen = new Set(); let first = true;
 async function tick() {
   $('#st').textContent = 'Scanning…';

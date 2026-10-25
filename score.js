@@ -35,11 +35,11 @@ export function evaluate(p) {
 }
 
 const norm = p => {
-  const a = p.attributes, net = p.relationships.network.data.id, t = a.transactions?.h24 || {};
+  const a = p.attributes, net = p.relationships?.network?.data?.id || p.id.split('_')[0], t = a.transactions?.h24 || {};
   return { key: p.id, net, sym: a.name, liq: +a.reserve_in_usd || 0, vol: +a.volume_usd?.h24 || 0,
     h1: +a.price_change_percentage?.h1 || 0, h24: +a.price_change_percentage?.h24 || 0,
     buys: t.buys || 0, sells: t.sells || 0, ageH: (Date.now() - new Date(a.pool_created_at)) / 36e5,
-    addr: (p.relationships.base_token?.data?.id || '').split('_').slice(1).join('_'),
+    addr: (p.relationships?.base_token?.data?.id || '').split('_').slice(1).join('_'),
     url: `https://www.geckoterminal.com/${net}/pools/${a.address}`, kind: 'meme' };
 };
 
